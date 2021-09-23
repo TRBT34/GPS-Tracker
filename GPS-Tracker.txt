@@ -1,0 +1,262 @@
+#include <SoftwareSerial.h>
+#include <TinyGPS.h>
+#include <Wire.h>
+
+TinyGPS gps;
+
+SoftwareSerial ss(10,11);      //gps(port1) tx rx konum bilgisi icin
+SoftwareSerial sim800(3,2);    //gsm(port2) tx rx konum bilgisi icin
+
+char Received_SMS;              // Burada alınan SMS'in tamamını (telefon gönderme numarası ve tarih/saat ile) char olarak saklıyoruz
+String Data_SMS;               //Telefon numarasına göndereceğimiz SMS şu: DHT datası veya MLX datası içerebilir.
+
+int darbesensor = 9;      //darbe sensörü
+int acc = 6;              //kontak (acc)
+
+uint8_t lastsat = 0;       //gps durumunun hafızaya alınması için
+float lastflat = 0;
+float lastflon = 0;
+
+long vibration = 0;
+int vibrationstatus = 0;
+
+int accstatus = 0; 
+int accCounter = 1;
+
+int alt2, speed2, year2;
+byte month2, day2, hour2, minute2, second2;
+
+
+
+void setup()
+{
+ 
+  Serial.begin(9600);                      /* Bilgisayar ile haberleşmeyi başlatıyoruz */
+  pinMode(darbesensor,INPUT);
+  pinMode(acc,INPUT);
+  ss.begin(9600);                               /* birinci yazılımsal haberleşme portu başlatılıyor */
+  sim800.begin(9600);                          /* ikinci yazılımsal haberleşme portu başlatılıyor */
+  delay(10000);                                   //Modülün ağa bağlanmasına izin verme gecikmesi kaldırılabilir
+  //ReceiveMode();                             //SIM800L modülünü SMS alma moduna geçiren fonksiyonun çağrılması
+}
+
+void loop()
+{
+                                          /* portikidinleniyor */
+  vibrationstatus=0;                                        
+  ss.listen(); 
+  smartdelay(1000); 
+  Serial.println();
+  vibration = pulseIn(darbesensor,HIGH);  
+  Serial.print("titresimden okunan deger: ");          // deneme icin
+  Serial.println(vibration);                           //deneme icin
+  Serial.print(" No TOUCHED (1)");
+  accstatus=digitalRead(acc);                           //istedigimiz zaman acc bilgisi alabilmek için
+  
+  if ( accstatus == HIGH && accCounter == 1) 
+  {
+     Serial.println("Kontak Açık");
+     Serial.println("Gps taramada. Konum bulununca sms atılacak.");
+     sendlocation();
+     accCounter = 0;
+  }
+  if( accstatus == LOW)
+  {
+    accCounter = 1;
+    }
+  if (vibration > 10000 && accstatus == LOW)   
+  {
+     vibrationstatus = 1;
+     Serial.println("TOUCHED (0)");
+     Serial.println("Gps taramada. Son konum: ");
+     Serial.print("Uydu Sayısı: ");
+     Serial.println(lastsat);
+     Serial.print("Enlem : ");
+     Serial.println(lastflat,6);
+     Serial.print("Boylam : ");
+     Serial.println(lastflon,6);
+     Serial.println("Bilgilendirme amaçlı son Konum sms atılıyor");
+     sendlocation();
+     vibration = 0;
+     delay(25000);
+  }
+
+
+
+
+
+                                          
+  /*
+  String RSMS;            //Bu yeni değişken String türünü ekliyoruz ve her zaman başlatılacak şekilde döngüye koyuyoruz
+                           //Alınan SMS'i buraya koyuyoruz, evet yukarıda Recevided_SMS değişkeni var, aşağıda bir hile kullanıyoruz
+                          //"Karakter Recevied_SMS" ile "String RSMS"i birleştirmek için, "RSMS", alınan SMS'i ancak bir String olarak içerir
+                          //Alınan SMS doğrudan String olarak saklanamaz
+  
+  while(sim800.available()>0)
+  {      //SIM800L Arduino'ya bir şey gönderdiğinde... muhtemelen SMS alındı... eğer başka bir şey sorun değilse
+        
+   Received_SMS=sim800.read();  //"char Received_SMS" artık alınan SMS'in tamamını içeriyor
+   Serial.print(Received_SMS);   //Seri monitörde göster (isteğe bağlı)
+   RSMS.concat(Received_SMS);    //"char alınan_SMS"i "boş" olan RSMS ile birleştir
+   DHT_OK=RSMS.indexOf("DHT");   //İşte bu yüzden char'dan String'e geçtik, bu "indexOf" işlevini kullanabilmek için
+   MLX_OK=RSMS.indexOf("MLX");   //"indexOf işlevi, Dize (burada RSMS) içindeki "x" alt dizesini arar ve bize dizinini veya konumunu verir
+                                      //Örneğin başında bulunursa 1 karakterden sonra "0" verir, "1" olur
+                                      // Bulunamazsa "-1" verir, yani değişkenler tamsayı
+
+  }
+
+  //**************************************************
+                                                 (SMS ALIM OLMADIĞI İÇİN BURASI DA DEAKTİF)
+  if(DHT_OK!=-1){                         //SMS içinde "DHT" kelimesi bulunursa, DHT_OK'nin -1'den farklı bir değeri olduğu anlamına gelir, böylece devam edebiliriz
+    Serial.println("found DHT"); 
+
+    Data_SMS = "DHT";
+                                                                                        //Ve sonra okunan değerler
+    
+    Send_Data();                     //Bu fonksiyon SMS gönderme modunu ayarlar, göndereceğimiz telefon numarasını hazırlar ve "Data_SMS" Stringini gönderir.
+    ReceiveMode();                  //SMS Alma moduna geri dönün ve diğer SMS'leri bekleyin
+    
+    DHT_OK=-1;                      //DHT bulunursa, değişken -1'e sıfırlanmalıdır, aksi takdirde !=-1 olarak tutulacak ve tekrar tekrar SMS gönderecektir.
+    MLX_OK=-1;                      //Belki gerekli değil... Bir çok test yaptım ve belki başlangıçta RSMS dizgisi bitiştirmeye devam etti ve MLX kelimesi orada tutuldu
+                                    // Ve bu noktada kodu onsuz yeniden yüklemek ve test etmek için çok tembelim...                                  
+  }
+  */
+
+}
+void Serialcom() //Bu ReceiveMode işleviyle kullanılır, Seri monitörlü testler için kullanılabilir
+{
+  delay(500);
+  while(Serial.available())                                                                      
+  {
+    sim800.write(Serial.read());//Seri alınanı Yazılım Seri Bağlantı Noktasına ilet
+  }
+  while(sim800.available())                                                                      
+  {
+    Serial.write(sim800.read());// Alınan Yazılım Serilerinin Seri Bağlantı Noktasına iletilmesi
+  }
+}
+/*
+void ReceiveMode(){      //SIM800L Alma modunu ayarla (SMS ALMA KULLANILMADIGI İCİN AKTİF DEĞİL. iSTEĞE GÖRE DEĞİSTİRİLEBİLİR.)
+  
+  sim800.println("AT"); //Her şey yolundaysa, seri monitörde "OK" görüntülenecektir.
+  Serialcom();
+  sim800.println("AT+CMGF=1"); // METİN modunu yapılandırma
+  Serialcom();
+  sim800.println("AT+CNMI=2,2,0,0,0"); //Alınan SMS'in nasıl yönetileceği konusunda SIM800L'yi yapılandırın... SIM800L AT komut kılavuzunu kontrol edin
+  Serialcom();
+}                                 
+*/
+
+void Send_Data()
+{
+  sim800.print("AT+CMGF=1\r");          // Modülü SMS moduna ayarlayın
+  delay(100);
+  sim800.print("AT+CMGS=\"+905380568679\"\r");  //Telefon numaranız ülke kodunu eklemeyi unutmayın örnek +212xxxxxxxxx"
+  delay(500);
+  Data_SMS =  "Hey Batuhan " ;  
+  delay(500);
+  
+  sim800.print(Data_SMS + day2 + "."  + month2 + "." + year2 + " tarihinde. Saat: " 
+  + hour2 + ":" + minute2 + ":" + second2 + " de supheli bir durum tespit edildi."
+  + " Acc:" + accstatus + " Shock:" + vibrationstatus + " Hiz:" + speed2 + " " + "https://www.google.com/maps/place/" + String(lastflat,6)+ "," + String(lastflon,6));
+  
+  
+  delay(500);
+  sim800.print((char)26);  //Modele SMS gönderebileceğini söylemek için gerekli
+  delay(500);
+  sim800.println();
+  delay(500);
+}
+
+static void smartdelay(unsigned long ms)
+{
+  unsigned long start = millis();
+  do 
+  {
+    while (ss.available())
+      gps.encode(ss.read());
+  } while (millis() - start < ms);
+}
+
+int sendlocation()    //tam konum bulmadan ekrana yazar ama sms atmaz. Konum bulunca uydu sayısını ve koordinatları hafızaya alır, ardından tüm bilgileri sms atar.
+{
+  int looper = 1;
+  int counter=0; 
+  
+  while (looper==1)
+  {
+
+    Serial.println("Konum Aranıyor");
+
+    uint8_t sat = gps.satellites();
+    Serial.print("Uydu Sayısı: ");
+    Serial.println(sat);
+
+
+    float flat, flon;
+    unsigned long age;
+    gps.f_get_position(&flat,&flon,&age);
+    Serial.print("Enlem : ");
+    Serial.println(flat,6);
+    Serial.print("Boylam : ");
+    Serial.println(flon,6);
+
+
+    int alt = gps.f_altitude();
+    Serial.print("Yükseklik: ");
+    Serial.println(alt);
+    alt2=alt;
+
+    int speed = gps.f_speed_kmph();
+    Serial.print("Hız: ");
+    Serial.println(speed);
+    speed2=speed;
+
+    int crs = gps.f_course();
+    Serial.print("Yön(Açı) : ");
+    Serial.println(crs);
+
+    int year;
+    byte month, day, hour, minute, second, hundredths;
+    unsigned long age2;
+    gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age2);
+
+
+    Serial.print("Tarih : ");
+    Serial.print(day);
+    Serial.print(".");
+    Serial.print(month);
+    Serial.print(".");
+    Serial.println(year);
+    day2=day;
+    month2=month;
+    year2=year;
+
+    Serial.print("Saat : ");
+    Serial.print(hour+3);
+    Serial.print(":");
+    Serial.print(minute);
+    Serial.print(":");
+    Serial.println(second);
+    hour2=hour+3;
+    minute2=minute;
+    second2=second;
+
+    delay(1000);
+
+
+    if(sat < 15 || counter > 15)
+    {
+      lastsat = sat;
+      lastflat = flat;
+      lastflon = flon;
+      sim800.listen(); 
+      Send_Data();
+      Serial.println("sms gönderildi");
+      looper=0;
+      counter=0;
+    }
+    counter++;
+  }
+  
+}
