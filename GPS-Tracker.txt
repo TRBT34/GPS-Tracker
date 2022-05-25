@@ -3,7 +3,7 @@
 #include <Wire.h>
 
 TinyGPS gps;
-
+//GPS için sadece 10 pini bağlanır. Gsm için görsel mevcut.(3 ve 2 pin). Titreşim sensörü 9 
 SoftwareSerial ss(10,11);      //gps(port1) tx rx konum bilgisi icin
 SoftwareSerial sim800(3,2);    //gsm(port2) tx rx konum bilgisi icin
 
